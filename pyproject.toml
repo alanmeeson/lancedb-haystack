@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "example-store"
+name = "lancedb-haystack"
 dynamic = ["version"]
-description = ''
+description = 'LanceDB backed datastore and retrievers for Haystack 2.X'
 readme = "README.md"
 requires-python = ">=3.7"
 license = "Apache-2.0"
 keywords = []
 authors = [
-  { name = "John Doe", email = "jd@example.com" },
+  { name = "Alan Meeson", email = "am@carefullycalculated.co.uk" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -27,18 +27,21 @@ classifiers = [
 dependencies = [
   "haystack-ai",
   "typing_extensions",
+  "lancedb",
+  "tantivy",
+  "duckdb"
 ]
 
 [project.urls]
-Documentation = "https://github.com/unknown/example-store#readme"
-Issues = "https://github.com/unknown/example-store/issues"
-Source = "https://github.com/unknown/example-store"
+Documentation = "https://github.com/alanmeeson/lancedb-haystack#readme"
+Issues = "https://github.com/alanmeeson/lancedb-haystack/issues"
+Source = "https://github.com/alanmeeson/lancedb-haystack"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/haystack_integrations"]
+packages = ["src/lancedb_haystack"]
 
 [tool.hatch.version]
-path = "src/haystack_integrations/document_stores/example_store/__about__.py"
+path = "src/lancedb_haystack/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -68,7 +71,7 @@ dependencies = [
   "ruff>=0.0.243",
 ]
 [tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive --explicit-package-bases {args:src/haystack_integrations}"
+typing = "mypy --install-types --non-interactive --explicit-package-bases {args:src/lancedb_haystack}"
 style = [
   "ruff check {args:.}",
   "black --check --diff {args:.}",
@@ -137,7 +140,7 @@ lint.unfixable = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["example_store"]
+known-first-party = ["lancedb_haystack"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"
@@ -147,16 +150,16 @@ ban-relative-imports = "parents"
 "tests/**/*" = ["PLR2004", "S101", "TID252"]
 
 [tool.coverage.run]
-source_pkgs = ["example_store", "tests"]
+source_pkgs = ["lancedb_haystack", "tests"]
 branch = true
 parallel = true
 omit = [
-  "src/example_store/__about__.py",
+  "src/lancedb_haystack/__about__.py",
 ]
 
 [tool.coverage.paths]
-example_store = ["src/example_store", "*/example-store/src/example_store"]
-tests = ["tests", "*/example-store/tests"]
+lancedb_haystack = ["src/lancedb_haystack", "*/lancedb-haystack/src/lancedb_haystack"]
+tests = ["tests", "*/lancedb-haystack/tests"]
 
 [tool.coverage.report]
 exclude_lines = [

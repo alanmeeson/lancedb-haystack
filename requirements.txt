@@ -1,0 +1,10 @@
+jupyterlab
+pyprojroot
+tqdm
+ipywidgets
+haystack-ai
+fastembed
+lancedb
+tantivy
+fastembed-haystack
+duckdb
