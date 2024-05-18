@@ -71,7 +71,7 @@ dependencies = [
   "ruff>=0.0.243",
 ]
 [tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive --explicit-package-bases {args:src/lancedb_haystack}"
+typing = "mypy --install-types --non-interactive {args:src/lancedb_haystack tests}"
 style = [
   "ruff check {args:.}",
   "black --check --diff {args:.}",
@@ -179,6 +179,7 @@ markers = [
 module = [
   "haystack.*",
   "pytest.*",
-  "haystack_integrations.*"
+  "haystack_integrations.*",
+  "lancedb.*"
 ]
 ignore_missing_imports = true

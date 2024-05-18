@@ -190,7 +190,7 @@ class LanceDBDocumentStore(DocumentStore):
 
         if self._table_name in self.db.table_names():
             table = self.db.open_table(self._table_name)
-            where_clause = _in(object_ids)
+            where_clause = _in("id", object_ids)
             table.delete(where_clause)
 
     def to_dict(self) -> Dict[str, Any]:

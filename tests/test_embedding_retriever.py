@@ -28,10 +28,7 @@ def test_to_dict(tmp_dir):
         "type": "lancedb_haystack.embedding_retriever.LanceDBEmbeddingRetriever",
         "init_parameters": {
             "document_store": {
-                "init_parameters": {
-                    "database": path,
-                    "table_name": "test_table"
-                },
+                "init_parameters": {"database": path, "table_name": "test_table"},
                 "type": "lancedb_haystack.document_store.LanceDBDocumentStore",
             },
             "filters": {},
