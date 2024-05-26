@@ -1,38 +1,23 @@
-[![test](https://github.com/deepset-ai/document-store/actions/workflows/test.yml/badge.svg)](https://github.com/deepset-ai/document-store/actions/workflows/test.yml)
+[![test](https://github.com/alanmeeson/lancedb-haystack/actions/workflows/test.yml/badge.svg)](https://github.com/alanmeeson/lancedb-haystack/actions/workflows/test.yml)
 
-# Example Store
+# LanceDB Haystack Document store
 
-This Github repository is a template that can be used to create custom document stores to extend
-the new [Haystack](https://github.com/deepset-ai/haystack/) API available from version 2.0.
+LanceDB-Haystack is an embedded [LanceDB](https://lancedb.github.io/lancedb/) backed Document Store for 
+[Haystack 2.X](https://github.com/deepset-ai/haystack/) intended for prototyping or small systems.
 
-## Template features
+## Installation
 
-By creating a new repo using this template, you'll get the following advantages:
-- Ready-made code layout and scaffold to build a custom document store.
-- Support for packaging and distributing the code through Python wheels using Hatch.
-- Github workflow to build and upload a package when tagging the repo.
-- Github workflow to run the tests on Pull Requests.
+The current simplest way to get LanceDB-Haystack is to install from GitHub via pip:
 
-## How to use this repo
+```pip install git+https://github.com/alanmeeson/lancedb-haystack.git```
 
-1. Create a new repository starting from this template. If you never used this feature before, you
-   can find more details in [Github docs](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
-2. If possible, follow the convention `technology-haystack` for the name of the new repository,
-   where `technology` can be for example the name of a vector database you're integrating.
-3. Rename the package `src/example_store` to something more meaningful and adjust the Python
-   import statements.
-4. Replace any occurrence of `example_store` and `example-store` across the repo, according
-   to the name you chose in the previous steps.
-5. Search the whole codebase for the string `#FIXME`, that's where you're supposed to change or add
-   code specific for the database you're integrating.
-6. If Apache 2.0 is not suitable for your needs, change the software license.
+## Usage
 
-When your custom document store is ready and working, feel free to add it to the list of available
-[Haystack Integrations](https://haystack.deepset.ai/integrations) by opening a Pull Request in
-[this repo](https://github.com/deepset-ai/haystack-integrations).
+See the example in `examples/pipeline-usage.ipynb`
 
+## Development
 
-## Test
+### Test
 
 You can use `hatch` to run the linters:
 
@@ -42,7 +27,7 @@ cmd [1] | ruff .
 cmd [2] | black --check --diff .
 All done! ✨ 🍰 ✨
 6 files would be left unchanged.
-cmd [3] | mypy --install-types --non-interactive src/example_store tests
+cmd [3] | mypy --install-types --non-interactive src/lancedb_haystack tests
 Success: no issues found in 6 source files
 ```
 
@@ -54,26 +39,42 @@ cmd [1] | coverage run -m pytest tests
 ...
 ```
 
-## Build
+### Build
 
 To build the package you can use `hatch`:
 
 ```console
 ~$ hatch build
 [sdist]
-dist/example_store-0.0.1.tar.gz
+dist/lancedb_haystack-0.0.1.tar.gz
 
 [wheel]
-dist/example_store-0.0.1-py3-none-any.whl
+dist/lancedb_haystack-0.0.1-py3-none-any.whl
 ```
 
-## Release
+### Roadmap
 
-To automatically build and push the package to PyPI, you need to set a repository secret called `PYPI_API_TOKEN`
-containing a valid token for your PyPI account.
-Then set the desired version number in `src/example_store/__about__.py` and tag the commit using the format
-`vX.Y.Z`. After pushing the tag, a Github workflow will start and take care of building and releasing the package.
+In no particular order:
+- **Write more documentation**
+  
+  There's docstrings in the code, but there's an outstanding task to configure pydoc or similar to produce some api
+  docs.  Also, documentation to explain the data model and how it works would be a good idea.
 
-## License
+- **Figure out if it's possible to have LanceDB work with dynamic metadata**
 
-`example-store` is distributed under the terms of the [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) license.
+  Currently this implementation is limited to having only metadata which is defined in the metadata_schema.  It would be
+  nice to be able to infer a schema from the first document to be added, or even better, be able to just have arbitrary
+  metadata, rather than having to specify it all up front.
+
+- **Expand the supported metadata types**
+  
+  As noted the metadata section requires a pyarrow schema;  not all of the types have been tested, and may not all be 
+  supported.  It would be good to try out a few more to see if they're supported, and perhaps add those that aren't. 
+
+## Limitations
+
+The DocumentStore requires a pyarrow StructType to be specified as the schema for the metadata dict.  This should cover
+all metadata fields which may appear in any of the documents you want to store.
+
+Currently the system supports the basic datatypes (ints, floats, bools, strings, etc.)  as well as structs.  Others may
+work, but haven't been tested.
