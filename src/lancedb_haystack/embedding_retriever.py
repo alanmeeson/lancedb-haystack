@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from haystack import DeserializationError, Document, component, default_from_dict, default_to_dict
 
 from lancedb_haystack.document_store import LanceDBDocumentStore
-from lancedb_haystack.filters import _convert_filters_to_where_clause_and_params
 
 
 @component
@@ -61,31 +60,11 @@ class LanceDBEmbeddingRetriever:
         filters = filters if filters else self._filters
         top_k = top_k if top_k else self._top_k
 
-        # Perform the Embedding query
-        if self._document_store._table_name in self._document_store.db.table_names():
-            table = self._document_store.db.open_table(self._document_store._table_name)
-        else:
-            return []
+        if not query_embedding:
+            err = "Query_embedding should be a non-empty list of floats"
+            raise ValueError(err)
 
-        # Perform the FTS query
-        query_builder = table.search(query_embedding)
-
-        if filters:
-            filter_query = _convert_filters_to_where_clause_and_params(filters)
-            query_builder = query_builder.where(filter_query, prefilter=True)
-
-        if top_k:
-            query_builder = query_builder.limit(top_k)
-
-        res = query_builder.to_list()
-
-        docs = []
-        for doc_dict in res:
-            doc_dict["score"] = doc_dict.pop("_distance")
-            doc_dict["embedding"] = doc_dict.pop("vector")
-            doc_dict = {k: v for k, v in doc_dict.items() if v is not None}
-            doc = Document.from_dict(doc_dict)
-            docs.append(doc)
+        docs = self._document_store.perform_query(query=query_embedding, filters=filters, top_k=top_k)
 
         return {"documents": docs}
 

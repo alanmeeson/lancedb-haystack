@@ -3,17 +3,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import logging
-from typing import Any, Dict, Iterable, List, Optional
-import datetime
+from typing import Any, Dict, Iterable, List, Optional, Union
+
 import lancedb
 import pyarrow as pa
-from collections import OrderedDict
 from haystack import Document, default_from_dict, default_to_dict
 from haystack.document_stores.errors import DuplicateDocumentError
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 
-from lancedb_haystack.filters import _convert_filters_to_where_clause_and_params, _in
-from lancedb_haystack.type_utils import pyarrow_struct_to_dict, dict_to_pyarrow_struct
+from lancedb_haystack.conversion.lancedb_to_python import convert_lancedb_to_document
+from lancedb_haystack.conversion.python_to_lancedb import convert_document_to_lancedb
+from lancedb_haystack.filters import convert_filters_to_where_clause, in_
+from lancedb_haystack.schema.serialization import dict_to_pyarrow_struct, pyarrow_struct_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,13 @@ class LanceDBDocumentStore(DocumentStore):
         """
         Initializes the DocumentStore.
 
+        If metadata_schema and embedding_dims are used, these will be used to construct the table schema.
+        If they are not, then the schema will be inferred from the first document written. Note: this will limit the
+        metadata which can be included in the DocumentStore to only those fields which are included in the first
+        Document.
+        If this is an existing DocumentStore, which already has a schema in it, said schema will override anything you
+        pass in here.
+
         :param database: The path to the database file to be opened.
         :param table_name: The name of the table in the lancedb to use.
         :param metadata_schema: The schema for the metadata to use if creating the table.
@@ -40,41 +48,20 @@ class LanceDBDocumentStore(DocumentStore):
         """
         self._database = database
         self._table_name = table_name
-        self._metadata_schema = prepare_metadata_schema(metadata_schema)
+        self._metadata_schema = metadata_schema
         self._embedding_dims = embedding_dims
         self.db = lancedb.connect(database)
 
-    def _create_schema(self):
-        if self._metadata_schema is None:
-            err = "Trying to create new schema when metadata_schema is not specified."
-            raise ValueError(err)
-
-        if self._embedding_dims is None:
-            err = "Trying to create new schema when embedding_dims is not specified."
-            raise ValueError(err)
-
-        return pa.schema(
-            [
-                pa.field("id", pa.string(), nullable=False),
-                pa.field("vector", pa.list_(pa.float64(), list_size=self._embedding_dims)),  #lancedb.vector(self._embedding_dims, pa.float32())),
-                pa.field("_isempty_vector", pa.bool_()),
-                pa.field("content", pa.string()),
-                pa.field("dataframe", pa.string()),  # Using a string so we can jam the dataframe in as json.
-                pa.field("blob", pa.binary()),
-                pa.field("meta", self._metadata_schema),
-                # We skip score as this gets created by searches, and if we add it things break.
-                # pa.field('score', pa.float32()),
-            ]
-        )
-
-    def _table_exists(self) -> bool:
+    def table_exists(self) -> bool:
+        """Return True if the table already exists in the LanceDB backing this DocumentStore"""
         return self._table_name in self.db.table_names()
 
     def count_documents(self) -> int:
         """
         Returns how many documents are present in the document store.
+        If the table doesn't exist yet, returns 0.
         """
-        if self._table_exists():
+        if self.table_exists():
             table = self.db.open_table(self._table_name)
             count = table.count_rows()
         else:
@@ -149,21 +136,68 @@ class LanceDBDocumentStore(DocumentStore):
         :return: a list of Documents that match the given filters.
         """
 
-        if not self._table_exists():
+        # If the table hasn't been created yet, just return an empty list.
+        if not self.table_exists():
             return []
 
+        # If the table does exist, open it and perform the search
         table = self.db.open_table(self._table_name)
 
         if filters:
-            query = _convert_filters_to_where_clause_and_params(filters)
+            # If we have filters, construct the filtering clause and use it.
+            query = convert_filters_to_where_clause(filters)
             res = table.search().where(query).limit(0).to_list()
         else:
+            # Note: we have the limit(0) here and above so that we return _all_ documents.  Otherwise LanceDB defaults
+            # to a limit of 10.
             res = table.search().limit(0).to_list()
 
-        docs = [
-            convert_lancedb_to_document(doc_dict, table.schema)
-            for doc_dict in res
-        ]
+        # Convert the results from LanceDB into Haystack Documents.
+        # Note: we use the table.schema here as that will be the authoritative schema.
+        docs = [convert_lancedb_to_document(doc_dict, table.schema) for doc_dict in res]
+
+        return docs
+
+    def perform_query(
+        self,
+        query: Optional[Union[str, List[float]]] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: Optional[int] = None,
+    ) -> List[Document]:
+
+        if top_k and top_k <= 0:
+            err = f"If specifying top_k, must be greater than 0. Currently, the top_k is {top_k}"
+            raise ValueError(err)
+
+        # If the table hasn't been created yet, just return an empty list.
+        if not self.table_exists():
+            return []
+
+        # If the table does exist, open it and perform the search
+        table = self.db.open_table(self._table_name)
+
+        if query:
+            query_builder = table.search(query)
+        else:
+            query_builder = table.search()
+
+        if filters:
+            # If we have filters, construct the filtering clause and use it.
+            query = convert_filters_to_where_clause(filters)
+            query_builder = query_builder.where(query)
+
+        if top_k:
+            query_builder = query_builder.limit(top_k)
+        else:
+            # Note: we have the limit(0) here and above so that we return _all_ documents.  Otherwise LanceDB defaults
+            # to a limit of 10.
+            query_builder = query_builder.limit(0)
+
+        res = query_builder.to_list()
+
+        # Convert the results from LanceDB into Haystack Documents.
+        # Note: we use the table.schema here as that will be the authoritative schema.
+        docs = [convert_lancedb_to_document(doc_dict, table.schema) for doc_dict in res]
 
         return docs
 
@@ -188,19 +222,23 @@ class LanceDBDocumentStore(DocumentStore):
             err = "Please provide a list of Documents."
             raise ValueError(err)
 
-        if not self._table_exists():
-            schema = self._create_schema()
-            table = self.db.create_table(name=self._table_name, schema=schema, on_bad_vectors="fill", fill_value=0)
-        else:
+        # Connect to the table and figure out the schema
+        if self.table_exists():
+            # If table already exists then we use it, and use the schema from it
             table = self.db.open_table(self._table_name)
             schema = table.schema
+        else:
+            # If the table doesn't already exist, then we use the metadata schema provided in the constructor
+            schema = _create_schema(self._metadata_schema, self._embedding_dims)
+            table = self.db.create_table(name=self._table_name, schema=schema, on_bad_vectors="fill", fill_value=0)
 
+        # TODO: add something here that would handle the inferring schema from first document.
+
+        # Convert the documents ready to insert
         doc_dicts = [convert_document_to_lancedb(doc, schema) for doc in documents]
 
-        if policy == DuplicatePolicy.NONE:
-            policy = DuplicatePolicy.OVERWRITE
-
-        if policy == DuplicatePolicy.OVERWRITE:
+        # Actually do the insert
+        if policy == DuplicatePolicy.OVERWRITE or policy == DuplicatePolicy.NONE:  # noqa: PLR1714
             table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(doc_dicts)
             unique_new_ids = {doc["id"] for doc in doc_dicts}
             num_modified = len(unique_new_ids)
@@ -208,16 +246,17 @@ class LanceDBDocumentStore(DocumentStore):
         elif policy == DuplicatePolicy.SKIP:
             unique_new_ids = {doc["id"] for doc in doc_dicts}
             existing_ids = {
-                res["id"] for res in table.search().where(_in("id", list(unique_new_ids))).select(["id"]).to_list()
+                res["id"] for res in table.search().where(in_("id", list(unique_new_ids))).select(["id"]).to_list()
             }
             num_modified = len(unique_new_ids - existing_ids)
             table.merge_insert("id").when_not_matched_insert_all().execute(doc_dicts)
 
         elif policy == DuplicatePolicy.FAIL:
-            unique_new_ids = list({doc["id"] for doc in doc_dicts})
+            unique_new_ids = {doc["id"] for doc in doc_dicts}
             existing_ids = {
-                res["id"] for res in table.search().where(_in("id", unique_new_ids)).select(["id"]).to_list()
+                res["id"] for res in table.search().where(in_("id", list(unique_new_ids))).select(["id"]).to_list()
             }
+
             if len(existing_ids) > 0:
                 raise DuplicateDocumentError()
             else:
@@ -236,9 +275,9 @@ class LanceDBDocumentStore(DocumentStore):
         :param object_ids: the object_ids to delete
         """
 
-        if self._table_exists():
+        if self.table_exists():
             table = self.db.open_table(self._table_name)
-            where_clause = _in("id", object_ids)
+            where_clause = in_("id", object_ids)
             table.delete(where_clause)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -259,115 +298,80 @@ class LanceDBDocumentStore(DocumentStore):
         """
         Deserializes the store from a dictionary.
         """
-        metadata_schema = data['init_parameters'].get('metadata_schema')
+        metadata_schema = data["init_parameters"].get("metadata_schema")
         if metadata_schema:
             metadata_schema = dict_to_pyarrow_struct(metadata_schema)
-            data['init_parameters']['metadata_schema'] = metadata_schema
+            data["init_parameters"]["metadata_schema"] = metadata_schema
 
         return default_from_dict(cls, data)
 
 
-def prepare_metadata_schema(struct: pa.StructType) -> pa.StructType:
-    """Sort the fields in a struct into alphabetical order so that it doesn't complain when given a dict."""
+# -------------------------------------------
+# Functions for wrangling the schema
 
+
+def _create_schema(metadata_schema: pa.StructType, embedding_dims: Optional[int]) -> pa.Schema:
+    if metadata_schema is None:
+        err = "Trying to create new schema when metadata_schema is not specified."
+        raise ValueError(err)
+
+    if embedding_dims is None:
+        err = "Trying to create new schema when embedding_dims is not specified."
+        raise ValueError(err)
+
+    if embedding_dims <= 0:
+        err = "Trying to create new schema with a negative or zero embedding length."
+        raise ValueError(err)
+
+    return pa.schema(
+        [
+            pa.field("id", pa.string(), nullable=False),
+            pa.field("vector", pa.list_(pa.float32(), list_size=embedding_dims)),
+            pa.field("content", pa.string()),
+            pa.field("dataframe", pa.string()),  # Using a string, so we can jam the dataframe in as json.
+            pa.field("blob", pa.binary()),
+            pa.field("meta", _prepare_metadata_schema(metadata_schema)),
+            pa.field("_isempty", _create_isempty_section(["blob", "content", "dataframe", "id", "meta", "vector"])),
+        ]
+    )
+
+
+def _create_isempty_section(field_names) -> pa.StructType:
+    """Creates the _isempty struct for the given list of fields.
+
+    Haystack expects it's DocumentStores to return Documents which have only the fields they had when written.
+    Unfortunately, LanceDB expects all fields to exist in all records, and not all types have easy 'None' analogues.
+    To solve this we have a struct of boolean flags to indicate if a given field should be considered to be emtpy.
+    """
+    _isempty_type = pa.struct([pa.field(field_name, pa.bool_()) for field_name in field_names])
+    return _isempty_type
+
+
+def _prepare_metadata_schema(struct: pa.StructType) -> pa.StructType:
+    """Take a pyarrow.StructType describing the metadata section and prepare it for use with LanceDB.
+
+    This covers a couple of steps to address limitations:
+    1. sorting the fields into alphabetical order.  If we don't do this, then LanceDB tends to complain when we give it
+       a python dict, as those fields tend to be iterated in alphabetical order.
+    2. Add the _isempty section to each StructType in the specification.  This lets us know if the field is meant to be
+       empty in a given instance.
+    """
+
+    # Extract a list of all the fields, and recursively process and sub-structures
     fields = []
-
     for idx in range(struct.num_fields):
         field = struct.field(idx)
 
-        if isinstance(field, pa.StructType):
-            field = prepare_metadata_schema(field)
+        if isinstance(field.type, pa.StructType):
+            field = pa.field(field.name, _prepare_metadata_schema(field.type))
 
         fields.append(field)
 
+    # Sort the fields by the field name
     fields.sort(key=lambda x: x.name)
-    _isempty = [pa.field(f.name, pa.bool_()) for f in fields]
-    fields.insert(0, pa.field("_isempty", pa.struct(_isempty)))
+
+    # Add the "_isempty" field
+    is_empty_type = _create_isempty_section([f.name for f in fields])
+    fields.insert(0, pa.field("_isempty", is_empty_type))
 
     return pa.struct(fields)
-
-
-def convert_document_to_lancedb(document: Document, schema: pa.Schema) -> dict:
-    """Converts a Haystack Document to a format ready to store in lancedb"""
-
-    embed_dims = schema.field("vector").type.list_size
-    meta_schema = schema.field('meta')
-    doc_dict = document.to_dict(flatten=False)
-
-    # convert embedding to vector and fill if missing
-    embedding = doc_dict.pop("embedding")
-    doc_dict["vector"] = embedding if embedding else [0] * embed_dims
-    doc_dict["_isempty_vector"] = False if embedding else True
-
-    # remove score - the retrievers will add this if necessary
-    del doc_dict["score"]
-
-    # fill missing metadata fields
-    meta_dict = {}
-    _isempty = {}
-    for field_idx in range(meta_schema.type.num_fields):
-        field = meta_schema.type.field(field_idx)
-        field_name = field.name
-        if field_name in doc_dict["meta"]:
-            if str(field.type).startswith('timestamp'):
-                meta_dict[field_name] = pa.scalar(
-                    datetime.datetime.fromisoformat(doc_dict["meta"][field_name]),
-                    type=field.type
-                )
-            else:
-                meta_dict[field_name] = doc_dict["meta"][field_name]
-        else:
-            meta_dict[field_name] = None
-
-        _isempty[field_name] = False if field_name in doc_dict["meta"] else True
-
-    meta_dict["_isempty"] = _isempty
-    doc_dict["meta"] = meta_dict
-
-    # fill missing metadata fields
-    for field_name in schema.names:
-        value = doc_dict[field_name]
-        doc_dict[field_name] = value if value else None
-
-    return doc_dict
-
-
-def convert_lancedb_to_document(result, schema) -> Document:
-    """Convert a result lancedb into a document"""
-
-    # Add score if it's not present; and take it from _distance if appropriate
-    if "_distance" in result:
-        result["score"] = result.pop("_distance")
-    elif "score" not in result:
-        result["score"] = None
-
-    # filter the embedding
-    embedding = result.pop("vector")
-    if not result['_isempty_vector']:
-        result["embedding"] = embedding
-
-    del result['_isempty_vector']
-
-    # filter the metadata
-    meta_dict = _convert_metadata_lancedb(result['meta'], schema.field('meta').type)
-    result['meta'] = meta_dict
-
-    doc = Document.from_dict(result)
-    return doc
-
-
-def _convert_metadata_lancedb(metadata_dict: dict, meta_struct_type: pa.StructType) -> dict:
-    """Converts the metadata section of """
-    meta_dict = {}
-    for k, v in metadata_dict.items():
-        if (k != '_isempty') and not metadata_dict['_isempty'][k]:
-            # only add if the field isn't flagged as empty
-            if isinstance(v, datetime.datetime):
-                v = v.isoformat()
-            elif isinstance(v, dict):
-                nested_type = meta_struct_type.field(k).type
-                v = _convert_metadata_lancedb(v, nested_type)
-
-            meta_dict[k] = v
-
-    return meta_dict

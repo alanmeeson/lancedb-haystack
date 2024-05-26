@@ -2,9 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Note: S608 warning for SQL injection vector is disabled, as SQL query construction is necessary for building the
-# queries for the filters.
-# TODO: find a better way of doing this that doesn't require string construction.
 from datetime import datetime
 from typing import Any, Dict
 
@@ -12,10 +9,8 @@ import pandas as pd
 from haystack.errors import FilterError
 from pandas import DataFrame
 
-NO_VALUE = "no_value"
 
-
-def _convert_filters_to_where_clause_and_params(filters: Dict[str, Any]) -> str:
+def convert_filters_to_where_clause(filters: Dict[str, Any]) -> str:
     """
     Convert Haystack filters to a WHERE clause and a tuple of params to query PostgreSQL.
     """
@@ -89,7 +84,6 @@ def _parse_comparison_condition(condition: Dict[str, Any]) -> str:
 
 def _equal(field: str, value: Any) -> str:
     if value is None:
-        # NO_VALUE is a placeholder that will be removed in _convert_filters_to_where_clause_and_params
         return _is_null(field)
     if isinstance(value, str):
         query = f"{field} = '{value}'"
@@ -103,12 +97,11 @@ def _not_equal(field: str, value: Any) -> str:
     # we use IS DISTINCT FROM to correctly handle NULL values
     # (not handled by !=)
     if value is None:
-        # NO_VALUE is a placeholder that will be removed in _convert_filters_to_where_clause_and_params
         query = _is_not_null(field)
     elif isinstance(value, str):
-        query = f"({_is_null(field)} AND {field} != '{value}')"
+        query = f"({_is_null(field)} OR {field} != '{value}')"
     else:
-        query = f"({_is_null(field)} AND {field} != {value})"
+        query = f"({_is_null(field)} OR {field} != {value})"
     return query
 
 
@@ -182,7 +175,7 @@ def _less_than(field: str, value: Any) -> str:
         msg = f"Filter value can't be of type {type(value)} using operators '>', '>=', '<', '<='"
         raise FilterError(msg)
 
-    return f"({field} IS NOT NULL AND {field} < {value})"
+    return f"({_is_not_null(field)} AND {field} < {value})"
 
 
 def _less_than_equal(field: str, value: Any) -> str:
@@ -206,7 +199,7 @@ def _less_than_equal(field: str, value: Any) -> str:
         msg = f"Filter value can't be of type {type(value)} using operators '>', '>=', '<', '<='"
         raise FilterError(msg)
 
-    return f"({field} IS NOT NULL AND {field} <= {value})"
+    return f"({_is_not_null(field)} AND {field} <= {value})"
 
 
 def _not_in(field: str, value: Any) -> str:
@@ -215,17 +208,17 @@ def _not_in(field: str, value: Any) -> str:
         raise FilterError(msg)
 
     vals = ", ".join([f"'{val}'" if isinstance(val, str) else str(val) for val in value])
-    return f"{field} IS NULL OR {field} NOT IN ({vals}))"
+    return f"{_is_null(field)} OR {field} NOT IN ({vals}))"
 
 
-def _in(field: str, value: Any) -> str:
+def in_(field: str, value: Any) -> str:
     if not isinstance(value, list):
         msg = f"{field}'s value must be a list when using 'in' comparator in Pinecone"
         raise FilterError(msg)
 
     # ValueError: LanceError(IO): Received literal Utf8("10") and could not convert to literal of type 'Int32'
     vals = ", ".join([f"'{val}'" if isinstance(val, str) else str(val) for val in value])
-    query = f"{field} IN ({vals})"
+    query = f"{_is_not_null(field)} AND {field} IN ({vals})"
 
     return query
 
@@ -234,7 +227,7 @@ def _is_null(field: str) -> str:
     """Construct Filter term for the field being either empty or Null"""
     if field == "vector":
         # IF it's the vector field, check the _isempty_vector field too
-        query = f"(_isempty_vector == True OR vector is NULL)"
+        query = "(_isempty_vector == True OR vector is NULL)"
     elif field.startswith("meta"):
         # If it's a meta field in which we track whether things are empty, also check the _isempty entry
         field_prefix, field_name = field.rsplit(".", 1)
@@ -249,7 +242,7 @@ def _is_not_null(field: str) -> str:
     """Construct Filter term for the field being neither empty or Null"""
     if field == "vector":
         # IF it's the vector field, check the _isempty_vector field too
-        query = f"(_isempty_vector == False AND vector IS NOT NULL)"
+        query = "(_isempty_vector == False AND vector IS NOT NULL)"
     elif field.startswith("meta"):
         # If it's a meta field in which we track whether things are empty, also check the _isempty entry
         field_prefix, field_name = field.rsplit(".", 1)
@@ -267,6 +260,6 @@ COMPARISON_OPERATORS = {
     ">=": _greater_than_equal,
     "<": _less_than,
     "<=": _less_than_equal,
-    "in": _in,
+    "in": in_,
     "not in": _not_in,
 }

@@ -1,9 +1,6 @@
 # SPDX-FileCopyrightText: 2024-present Alan Meeson <am@carefullycalculated.co.uk>
 #
 # SPDX-License-Identifier: Apache-2.0
-from unittest.mock import Mock, patch
-
-import lancedb
 import pyarrow as pa
 from haystack.dataclasses import Document
 
@@ -11,26 +8,13 @@ from lancedb_haystack.document_store import LanceDBDocumentStore
 from lancedb_haystack.fts_retriever import LanceDBFTSRetriever
 
 
-def test_init_default():
-    mock_store = Mock(spec=LanceDBDocumentStore)
-    mock_store.db = Mock(spec=lancedb.DBConnection)
-    retriever = LanceDBFTSRetriever(document_store=mock_store)
-    assert retriever._document_store == mock_store
-    assert retriever._filters == {}
-    assert retriever._top_k == 10
-
-
-@patch("lancedb_haystack.document_store.LanceDBDocumentStore")
 def test_to_dict(tmp_path):
     path = str(tmp_path)
     document_store = LanceDBDocumentStore(
         path,
-       "test_table",
-        metadata_schema=pa.struct([
-            pa.field("a", pa.string()),
-            pa.field("b", pa.int32())
-        ]),
-        embedding_dims=384
+        "test_table",
+        metadata_schema=pa.struct([pa.field("a", pa.string()), pa.field("b", pa.int32())]),
+        embedding_dims=384,
     )
     retriever = LanceDBFTSRetriever(document_store=document_store)
     res = retriever.to_dict()
@@ -46,20 +30,10 @@ def test_to_dict(tmp_path):
                     "metadata_schema": {
                         "type": "struct",
                         "children": [
-                            {
-                                "name": "a",
-                                "type": "string",
-                                "nullable": True,
-                                "metadata": None
-                            },
-                            {
-                                "name": "b",
-                                "type": "int32",
-                                "nullable": True,
-                                "metadata": None
-                            }
-                        ]
-                    }
+                            {"name": "a", "type": "string", "nullable": True, "metadata": None},
+                            {"name": "b", "type": "int32", "nullable": True, "metadata": None},
+                        ],
+                    },
                 },
                 "type": "lancedb_haystack.document_store.LanceDBDocumentStore",
             },
@@ -69,7 +43,6 @@ def test_to_dict(tmp_path):
     }
 
 
-@patch("lancedb_haystack.document_store.LanceDBDocumentStore")
 def test_from_dict(tmp_path):
     path = str(tmp_path)
     data = {
@@ -83,20 +56,10 @@ def test_from_dict(tmp_path):
                     "metadata_schema": {
                         "type": "struct",
                         "children": [
-                            {
-                                "name": "a",
-                                "type": "string",
-                                "nullable": True,
-                                "metadata": None
-                            },
-                            {
-                                "name": "b",
-                                "type": "int32",
-                                "nullable": True,
-                                "metadata": None
-                            }
-                        ]
-                    }
+                            {"name": "a", "type": "string", "nullable": True, "metadata": None},
+                            {"name": "b", "type": "int32", "nullable": True, "metadata": None},
+                        ],
+                    },
                 },
                 "type": "lancedb_haystack.document_store.LanceDBDocumentStore",
             },
@@ -112,10 +75,13 @@ def test_from_dict(tmp_path):
 
 def test_run(tmp_path):
     path = str(tmp_path)
-    store = LanceDBDocumentStore(path, "test_table", metadata_schema=pa.struct([]), embedding_dims=2)
+    store = LanceDBDocumentStore(
+        path, "test_table", metadata_schema=pa.struct([pa.field("a", pa.int32())]), embedding_dims=2
+    )
     retriever = LanceDBFTSRetriever(document_store=store)
-    store.write_documents([Document(content="Test doc expecting some query")])
+    store.write_documents([Document(content="Test doc expecting some query", meta={"a": 1})])
     res = retriever.run(query="some query")
     assert len(res) == 1
     assert len(res["documents"]) == 1
     assert res["documents"][0].content == "Test doc expecting some query"
+    assert res["documents"][0].meta["a"] == 1

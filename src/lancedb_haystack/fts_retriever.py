@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from haystack import DeserializationError, Document, component, default_from_dict, default_to_dict
 
 from lancedb_haystack.document_store import LanceDBDocumentStore
-from lancedb_haystack.filters import _convert_filters_to_where_clause_and_params
 
 
 @component
@@ -55,43 +54,15 @@ class LanceDBFTSRetriever:
 
         :raises ValueError: If the specified DocumentStore is not found or is not a LanceDBFTSRetriever instance.
         """
+
         filters = filters if filters else self._filters
         top_k = top_k if top_k else self._top_k
-
-        if top_k and top_k <= 0:
-            err = f"top_k must be greater than 0. Currently, the top_k is {top_k}"
-            raise ValueError(err)
 
         if not query:
             err = "Query should be a non-empty string"
             raise ValueError(err)
 
-        if self._document_store._table_name in self._document_store.db.table_names():
-            table = self._document_store.db.open_table(self._document_store._table_name)
-        else:
-            return []
-
-        # Perform the FTS query
-        query_builder = table.search(query)
-
-        if filters:
-            filter_query = _convert_filters_to_where_clause_and_params(filters)
-            query_builder = query_builder.where(filter_query, prefilter=True)
-
-        if top_k:
-            query_builder = query_builder.limit(top_k)
-
-        res = query_builder.to_list()
-
-        docs = []
-        for doc_dict in res:
-            if "score" not in doc_dict:
-                doc_dict["score"] = None
-
-            doc_dict["embedding"] = doc_dict.pop("vector")
-            doc_dict = {k: v for k, v in doc_dict.items() if v is not None}
-            doc = Document.from_dict(doc_dict)
-            docs.append(doc)
+        docs = self._document_store.perform_query(query=query, filters=filters, top_k=top_k)
 
         return {"documents": docs}
 

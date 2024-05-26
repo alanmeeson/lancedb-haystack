@@ -31,7 +31,7 @@ class TestLanceDBDocumentStore(DocumentStoreBaseTests):
                 ("page", pa.string()),
                 ("chapter", pa.string()),
                 ("number", pa.int32()),
-                ("date", pa.timestamp('s')),
+                ("date", pa.timestamp("s")),
                 ("no_embedding", pa.bool_()),
             ]
         )
@@ -58,8 +58,11 @@ class TestLanceDBDocumentStore(DocumentStoreBaseTests):
 
                 if (a_embedding is None) and (b_embedding is None):
                     embeddings_equal = True
-                elif (a_embedding is not None) and (b_embedding is not None) and all(
-                        [abs(a - b) < eps for a, b in zip(a_embedding, b_embedding)]):
+                elif (
+                    (a_embedding is not None)
+                    and (b_embedding is not None)
+                    and all(abs(a - b) < eps for a, b in zip(a_embedding, b_embedding))
+                ):
                     embeddings_equal = True
                 else:
                     embeddings_equal = False
