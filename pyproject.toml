@@ -180,6 +180,7 @@ module = [
   "haystack.*",
   "pytest.*",
   "haystack_integrations.*",
-  "lancedb.*"
+  "lancedb.*",
+  "pyarrow.*"
 ]
 ignore_missing_imports = true

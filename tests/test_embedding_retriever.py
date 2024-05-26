@@ -1,16 +1,16 @@
 # SPDX-FileCopyrightText: 2024-present Alan Meeson <am@carefullycalculated.co.uk>
 #
 # SPDX-License-Identifier: Apache-2.0
+import pyarrow as pa
 from haystack.dataclasses import Document
-
 from lancedb_haystack.document_store import LanceDBDocumentStore
 from lancedb_haystack.embedding_retriever import LanceDBEmbeddingRetriever
 
 # TODO: see if there's a cleaner way of testing an optional package that won't be available on all environments
 
 
-def test_init_default(tmp_dir):
-    store = LanceDBDocumentStore(tmp_dir)
+def test_init_default(tmp_path):
+    store = LanceDBDocumentStore(tmp_path, table_name="test_table")
 
     retriever = LanceDBEmbeddingRetriever(document_store=store)
     assert retriever._document_store == store
@@ -18,8 +18,8 @@ def test_init_default(tmp_dir):
     assert retriever._top_k == 10
 
 
-def test_to_dict(tmp_dir):
-    path = tmp_dir
+def test_to_dict(tmp_path):
+    path = str(tmp_path)
     store = LanceDBDocumentStore(path, "test_table")
     retriever = LanceDBEmbeddingRetriever(document_store=store)
     res = retriever.to_dict()
@@ -28,7 +28,7 @@ def test_to_dict(tmp_dir):
         "type": "lancedb_haystack.embedding_retriever.LanceDBEmbeddingRetriever",
         "init_parameters": {
             "document_store": {
-                "init_parameters": {"database": path, "table_name": "test_table"},
+                "init_parameters": {"database": path, "table_name": "test_table", "embedding_dims": None, "metadata_schema": None},
                 "type": "lancedb_haystack.document_store.LanceDBDocumentStore",
             },
             "filters": {},
@@ -37,8 +37,8 @@ def test_to_dict(tmp_dir):
     }
 
 
-def test_from_dict(tmp_dir):
-    path = tmp_dir
+def test_from_dict(tmp_path):
+    path = str(tmp_path)
     data = {
         "type": "lancedb_haystack.embedding_retriever.LanceDBEmbeddingRetriever",
         "init_parameters": {
@@ -57,11 +57,11 @@ def test_from_dict(tmp_dir):
     assert retriever._top_k == 10
 
 
-def test_run(tmp_dir):
-    path = tmp_dir
-    store = LanceDBDocumentStore(path, "test_table")
+def test_run(tmp_path):
+    path = str(tmp_path)
+    store = LanceDBDocumentStore(path, "test_table", metadata_schema=pa.struct([pa.field("foo", pa.string())]), embedding_dims=2)
     retriever = LanceDBEmbeddingRetriever(document_store=store)
-    store.write_documents([Document(content="Test doc", embedding=[0.5, 0.7])])
+    store.write_documents([Document(content="Test doc", embedding=[0.5, 0.7], meta={'foo': 'a'})])
     res = retriever.run(query_embedding=[0.5, 0.7])
 
     assert len(res) == 1

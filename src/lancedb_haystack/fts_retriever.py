@@ -89,6 +89,7 @@ class LanceDBFTSRetriever:
                 doc_dict["score"] = None
 
             doc_dict["embedding"] = doc_dict.pop("vector")
+            doc_dict = {k: v for k, v in doc_dict.items() if v is not None}
             doc = Document.from_dict(doc_dict)
             docs.append(doc)
 

@@ -4,6 +4,7 @@
 from unittest.mock import Mock, patch
 
 import lancedb
+import pyarrow as pa
 from haystack.dataclasses import Document
 
 from lancedb_haystack.document_store import LanceDBDocumentStore
@@ -20,9 +21,17 @@ def test_init_default():
 
 
 @patch("lancedb_haystack.document_store.LanceDBDocumentStore")
-def test_to_dict(tmp_dir):
-    path = tmp_dir
-    document_store = LanceDBDocumentStore(path, "test_table")
+def test_to_dict(tmp_path):
+    path = str(tmp_path)
+    document_store = LanceDBDocumentStore(
+        path,
+       "test_table",
+        metadata_schema=pa.struct([
+            pa.field("a", pa.string()),
+            pa.field("b", pa.int32())
+        ]),
+        embedding_dims=384
+    )
     retriever = LanceDBFTSRetriever(document_store=document_store)
     res = retriever.to_dict()
 
@@ -30,7 +39,28 @@ def test_to_dict(tmp_dir):
         "type": "lancedb_haystack.fts_retriever.LanceDBFTSRetriever",
         "init_parameters": {
             "document_store": {
-                "init_parameters": {"database": path, "table_name": "test_table"},
+                "init_parameters": {
+                    "database": path,
+                    "table_name": "test_table",
+                    "embedding_dims": 384,
+                    "metadata_schema": {
+                        "type": "struct",
+                        "children": [
+                            {
+                                "name": "a",
+                                "type": "string",
+                                "nullable": True,
+                                "metadata": None
+                            },
+                            {
+                                "name": "b",
+                                "type": "int32",
+                                "nullable": True,
+                                "metadata": None
+                            }
+                        ]
+                    }
+                },
                 "type": "lancedb_haystack.document_store.LanceDBDocumentStore",
             },
             "filters": {},
@@ -40,13 +70,34 @@ def test_to_dict(tmp_dir):
 
 
 @patch("lancedb_haystack.document_store.LanceDBDocumentStore")
-def test_from_dict(tmp_dir):
-    path = tmp_dir
+def test_from_dict(tmp_path):
+    path = str(tmp_path)
     data = {
         "type": "lancedb_haystack.fts_retriever.LanceDBFTSRetriever",
         "init_parameters": {
             "document_store": {
-                "init_parameters": {"database": path, "table_name": "test_table"},
+                "init_parameters": {
+                    "database": path,
+                    "table_name": "test_table",
+                    "embedding_dims": 384,
+                    "metadata_schema": {
+                        "type": "struct",
+                        "children": [
+                            {
+                                "name": "a",
+                                "type": "string",
+                                "nullable": True,
+                                "metadata": None
+                            },
+                            {
+                                "name": "b",
+                                "type": "int32",
+                                "nullable": True,
+                                "metadata": None
+                            }
+                        ]
+                    }
+                },
                 "type": "lancedb_haystack.document_store.LanceDBDocumentStore",
             },
             "filters": {},
@@ -59,9 +110,9 @@ def test_from_dict(tmp_dir):
     assert retriever._top_k == 10
 
 
-def test_run(tmp_dir):
-    path = tmp_dir
-    store = LanceDBDocumentStore(path)
+def test_run(tmp_path):
+    path = str(tmp_path)
+    store = LanceDBDocumentStore(path, "test_table", metadata_schema=pa.struct([]), embedding_dims=2)
     retriever = LanceDBFTSRetriever(document_store=store)
     store.write_documents([Document(content="Test doc expecting some query")])
     res = retriever.run(query="some query")
