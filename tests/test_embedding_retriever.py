@@ -7,8 +7,6 @@ from haystack.dataclasses import Document
 from lancedb_haystack.document_store import LanceDBDocumentStore
 from lancedb_haystack.embedding_retriever import LanceDBEmbeddingRetriever
 
-# TODO: see if there's a cleaner way of testing an optional package that won't be available on all environments
-
 
 def test_init_default(tmp_path):
     store = LanceDBDocumentStore(tmp_path, table_name="test_table")
