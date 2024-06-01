@@ -9,7 +9,7 @@ LanceDB-Haystack is an embedded [LanceDB](https://lancedb.github.io/lancedb/) ba
 
 The current simplest way to get LanceDB-Haystack is to install from GitHub via pip:
 
-```pip install git+https://github.com/alanmeeson/lancedb-haystack.git```
+```pip install lancedb-haystack```
 
 ## Usage
 
