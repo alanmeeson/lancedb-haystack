@@ -6,7 +6,12 @@ from haystack import Document
 
 
 def convert_document_to_lancedb(document: Document, schema: pa.Schema) -> dict:
-    """Converts a Haystack Document to a format ready to store in lancedb"""
+    """Converts a Haystack Document to a format ready to store in lancedb
+
+    :param document: the Haystack document to prepare for insertion into LanceDB
+    :param schema: the lancedb table schema
+    :return: a dict
+    """
 
     embed_dims = schema.field("vector").type.list_size
     meta_schema = schema.field("meta").type
@@ -42,6 +47,12 @@ def convert_document_to_lancedb(document: Document, schema: pa.Schema) -> dict:
 
 
 def convert_field(value: Any, field_type: pa.DataType):
+    """Converts the value of a field from it's representation in haystack to the one used for LanceDB
+
+    :param value: the value to convert
+    :param field_type: The pyarrow type of the value, so we know how to convert it.
+    :return: the converted value
+    """
     field_str = str(field_type)
     if field_str.startswith("timestamp"):
         return convert_timestamp(value, field_type)
@@ -52,7 +63,12 @@ def convert_field(value: Any, field_type: pa.DataType):
 
 
 def convert_struct(value: dict, field_type: pa.StructType) -> dict:
+    """Convert a dict into the format expected by LanceDB
 
+    :param value: the value to convert
+    :param field_type: The pyarrow type of the value, so we know how to convert it.
+    :return: the converted value
+    """
     fields = [field_type.field(idx) for idx in range(field_type.num_fields) if field_type.field(idx).name != "_isempty"]
 
     struct_dict = {}
@@ -72,6 +88,12 @@ def convert_struct(value: dict, field_type: pa.StructType) -> dict:
 
 
 def convert_timestamp(value: Union[datetime.datetime, str], field_type: pa.DataType) -> pa.Scalar:
+    """Convert datetime or iso string into the format expected by LanceDB.
+
+    :param value: the value to convert
+    :param field_type: The pyarrow type of the value, so we know how to convert it.
+    :return: the converted value
+    """
     if isinstance(value, datetime.datetime):
         return_value = value
     elif isinstance(value, str):

@@ -31,20 +31,19 @@ class LanceDBDocumentStore(DocumentStore):
         metadata_schema: Optional[pa.StructType] = None,
         embedding_dims: Optional[int] = None,
     ):
-        """
-        Initializes the DocumentStore.
+        """Creates a LanceDBDocumentStore backed by the specified database and table_name.
 
-        If metadata_schema and embedding_dims are used, these will be used to construct the table schema.
-        If they are not, then the schema will be inferred from the first document written. Note: this will limit the
-        metadata which can be included in the DocumentStore to only those fields which are included in the first
-        Document.
-        If this is an existing DocumentStore, which already has a schema in it, said schema will override anything you
-        pass in here.
+        For new DocumentStores, the metadata_schema & embedding_dims *must* be provided, as this will be used to
+        construct schema for the pyarrow table used by LanceDB to store the documents.  The new table will only be
+        constructed upon the first write to the DocumentStore.
+
+        For existing DocumentStores, the metadata_schema & embedding_dims can be omitted, as they will be read from the
+        LanceDB database.  If you provide them anyway they will be ignored.
 
         :param database: The path to the database file to be opened.
         :param table_name: The name of the table in the lancedb to use.
-        :param metadata_schema: The schema for the metadata to use if creating the table.
-        :param embedding_dims: The size of the embedding vector to use if creating the table.
+        :param metadata_schema: The schema for the metadata to use if creating the table. Required for only new stores.
+        :param embedding_dims: The size of the embedding vector to use if creating the table. Required for new stores.
         """
         self._database = database
         self._table_name = table_name
@@ -53,13 +52,16 @@ class LanceDBDocumentStore(DocumentStore):
         self.db = lancedb.connect(database)
 
     def table_exists(self) -> bool:
-        """Return True if the table already exists in the LanceDB backing this DocumentStore"""
+        """Check if the table this DocumentStore relies on already exists.
+
+        :return: True if the table already exists in the LanceDB backing this DocumentStore
+        """
         return self._table_name in self.db.table_names()
 
     def count_documents(self) -> int:
-        """
-        Returns how many documents are present in the document store.
-        If the table doesn't exist yet, returns 0.
+        """Returns how many documents are present in the document store.
+
+        :return: the number of documents in the document store, or 0 if the table hasn't been created yet.
         """
         if self.table_exists():
             table = self.db.open_table(self._table_name)
@@ -74,6 +76,7 @@ class LanceDBDocumentStore(DocumentStore):
         Returns the documents that match the filters provided.
 
         Filters are defined as nested dictionaries that can be of two types:
+
         - Comparison
         - Logic
 
@@ -109,11 +112,13 @@ class LanceDBDocumentStore(DocumentStore):
 
 
         A simple filter:
+
         ```python
         filters = {"field": "meta.type", "operator": "==", "value": "article"}
         ```
 
         A more complex filter:
+
         ```python
         filters = {
             "operator": "AND",
@@ -130,7 +135,7 @@ class LanceDBDocumentStore(DocumentStore):
                     ],
                 },
             ],
-        }
+        }```
 
         :param filters: the filters to apply to the document list.
         :return: a list of Documents that match the given filters.
@@ -148,7 +153,7 @@ class LanceDBDocumentStore(DocumentStore):
             query = convert_filters_to_where_clause(filters)
             res = table.search().where(query).limit(0).to_list()
         else:
-            # Note: we have the limit(0) here and above so that we return _all_ documents.  Otherwise LanceDB defaults
+            # Note: we have the limit(0) here and above so that we return _all_ documents.  Otherwise, LanceDB defaults
             # to a limit of 10.
             res = table.search().limit(0).to_list()
 
@@ -164,6 +169,14 @@ class LanceDBDocumentStore(DocumentStore):
         filters: Optional[Dict[str, Any]] = None,
         top_k: Optional[int] = None,
     ) -> List[Document]:
+        """Performs a query againts the LanceDB backing this DocumentStore
+
+        :param query: Either a query string for FTS, a vector for vector search, or empty to just use filters.
+        :param filters: Filters to apply to the search. See: https://docs.haystack.deepset.ai/docs/metadata-filtering
+        :param top_k: limit the results to the top_k most relevant documents. Default: no limit
+        :return: a list of Haystack Documents which match the search and filters.
+        :raises ValueError: if an invalid top_k is given (ie: negative)
+        """
 
         if top_k and top_k <= 0:
             err = f"If specifying top_k, must be greater than 0. Currently, the top_k is {top_k}"
@@ -206,13 +219,14 @@ class LanceDBDocumentStore(DocumentStore):
         Writes (or overwrites) documents into the store.
 
         :param documents: a list of documents.
-        :param policy: documents with the same ID count as duplicates. When duplicates are met,
-            the store can:
+        :param policy: documents with the same ID count as duplicates. When duplicates are met, the store can:
              - skip: keep the existing document and ignore the new one.
              - overwrite: remove the old document and write the new one.
              - fail: an error is raised
+
         :raises DuplicateDocumentError: Exception trigger on duplicate document if `policy=DuplicatePolicy.FAIL`
-        :return: None
+        :return: the number of documents created or updated.
+        :raises ValueError: if no documents are provided.
         """
         if (
             not isinstance(documents, Iterable)
@@ -268,8 +282,7 @@ class LanceDBDocumentStore(DocumentStore):
         return num_modified
 
     def delete_documents(self, object_ids: List[str]) -> None:
-        """
-        Deletes all documents with a matching document_ids from the document store.
+        """Deletes all documents with a matching document_ids from the document store.
         Fails with `MissingDocumentError` if no document with this id is present in the store.
 
         :param object_ids: the object_ids to delete
@@ -281,9 +294,7 @@ class LanceDBDocumentStore(DocumentStore):
             table.delete(where_clause)
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Serializes this store to a dictionary.
-        """
+        """Serializes this store to a dictionary."""
         data = default_to_dict(
             self,
             database=self._database,
@@ -295,9 +306,7 @@ class LanceDBDocumentStore(DocumentStore):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LanceDBDocumentStore":
-        """
-        Deserializes the store from a dictionary.
-        """
+        """Deserializes the store from a dictionary."""
         metadata_schema = data["init_parameters"].get("metadata_schema")
         if metadata_schema:
             metadata_schema = dict_to_pyarrow_struct(metadata_schema)
@@ -311,6 +320,12 @@ class LanceDBDocumentStore(DocumentStore):
 
 
 def _create_schema(metadata_schema: pa.StructType, embedding_dims: Optional[int]) -> pa.Schema:
+    """Creates the LanceDB schema for the DocumentStore using the given metadata field schema and num embedding_dims.
+
+    :param metadata_schema: a pyarrow StructType defining the schema for the metadata field.
+    :param embedding_dims: the number of dimensions used in the embedding.
+    :return: a pyarrow schema used to initialise the table in LanceDB
+    """
     if metadata_schema is None:
         err = "Trying to create new schema when metadata_schema is not specified."
         raise ValueError(err)
@@ -318,8 +333,7 @@ def _create_schema(metadata_schema: pa.StructType, embedding_dims: Optional[int]
     if embedding_dims is None:
         err = "Trying to create new schema when embedding_dims is not specified."
         raise ValueError(err)
-
-    if embedding_dims <= 0:
+    elif embedding_dims <= 0:
         err = "Trying to create new schema with a negative or zero embedding length."
         raise ValueError(err)
 
@@ -336,12 +350,15 @@ def _create_schema(metadata_schema: pa.StructType, embedding_dims: Optional[int]
     )
 
 
-def _create_isempty_section(field_names) -> pa.StructType:
+def _create_isempty_section(field_names: List[str]) -> pa.StructType:
     """Creates the _isempty struct for the given list of fields.
 
     Haystack expects it's DocumentStores to return Documents which have only the fields they had when written.
     Unfortunately, LanceDB expects all fields to exist in all records, and not all types have easy 'None' analogues.
     To solve this we have a struct of boolean flags to indicate if a given field should be considered to be emtpy.
+
+    :param field_names: a list of fieldnames to create entries for in the _isempty struct
+    :return: a pyarrow StructType
     """
     _isempty_type = pa.struct([pa.field(field_name, pa.bool_()) for field_name in field_names])
     return _isempty_type
@@ -355,6 +372,9 @@ def _prepare_metadata_schema(struct: pa.StructType) -> pa.StructType:
        a python dict, as those fields tend to be iterated in alphabetical order.
     2. Add the _isempty section to each StructType in the specification.  This lets us know if the field is meant to be
        empty in a given instance.
+
+    :param struct: a pyarrow Struct
+    :return: a copy of the struct with suitable _isempty sections added.
     """
 
     # Extract a list of all the fields, and recursively process and sub-structures

@@ -5,11 +5,8 @@ def field_to_dict(field: pa.Field) -> dict:
     """
     Convert a PyArrow field to a dictionary representation, including nested fields.
 
-    Parameters:
-    field (pa.Field): The PyArrow field to convert.
-
-    Returns:
-    dict: The dictionary representation of the field.
+    :param field: The PyArrow field to convert.
+    :return: The dictionary representation of the field.
     """
     field_dict = {"name": field.name, "type": str(field.type), "nullable": field.nullable, "metadata": field.metadata}
 
@@ -24,11 +21,8 @@ def pyarrow_struct_to_dict(struct_type: pa.StructType) -> dict:
     """
     Convert a PyArrow StructType to a dictionary representation, including nested fields.
 
-    Parameters:
-    struct_type (pa.StructType): The PyArrow StructType to convert.
-
-    Returns:
-    dict: The dictionary representation of the StructType.
+    :param struct_type: The PyArrow StructType to convert.
+    :return: The dictionary representation of the StructType.
     """
     struct_dict = {
         "type": "struct",
@@ -42,11 +36,8 @@ def pyarrow_schema_to_dict(schema: pa.Schema) -> dict:
     """
     Convert a PyArrow schema to a JSON representation.
 
-    Parameters:
-    schema (pa.Schema): The PyArrow schema to convert.
-
-    Returns:
-    str: The JSON representation of the schema.
+    :param schema: The PyArrow schema to convert.
+    :return: The JSON representation of the schema.
     """
     schema_dict = {"fields": [field_to_dict(field) for field in schema]}
     return schema_dict
@@ -56,11 +47,8 @@ def dict_to_field(field_dict: dict) -> pa.Field:
     """
     Convert a dictionary representation of a field back to a PyArrow field, including nested fields.
 
-    Parameters:
-    field_dict (dict): The dictionary representation of the field.
-
-    Returns:
-    pa.Field: The reconstructed PyArrow field.
+    :param field_dict: The dictionary representation of the field.
+    :return: The reconstructed PyArrow field.
     """
     field_name = field_dict["name"]
     field_type_str = field_dict["type"]
@@ -79,11 +67,8 @@ def dict_to_pyarrow_struct(struct_dict: dict) -> pa.StructType:
     """
     Convert a dict representation of a struct type back to a PyArrow StructType.
 
-    Parameters:
-    struct_dict (dict): The dict representation of the struct.
-
-    Returns:
-    pa.StructType: The reconstructed PyArrow StructType.
+    :param struct_dict: The dict representation of the struct.
+    :return: The reconstructed PyArrow StructType.
     """
     children = [dict_to_field(child) for child in struct_dict["children"]]
     return pa.struct(children)
@@ -93,11 +78,8 @@ def dict_to_pyarrow_schema(schema_dict: dict) -> pa.Schema:
     """
     Convert a dict representation of a schema back to a PyArrow schema.
 
-    Parameters:
-    schema_dict (dict): The dict representation of the schema.
-
-    Returns:
-    pa.Schema: The reconstructed PyArrow schema.
+    :param schema_dict: The dict representation of the schema.
+    :return: The reconstructed PyArrow schema.
     """
     fields = [dict_to_field(field) for field in schema_dict["fields"]]
     return pa.schema(fields)

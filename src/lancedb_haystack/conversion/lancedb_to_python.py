@@ -6,7 +6,12 @@ from haystack import Document
 
 
 def convert_lancedb_to_document(result: dict, schema: pa.Schema) -> Document:
-    """Convert a result lancedb into a document"""
+    """Convert a lancedb result into a document
+
+    :param result: the result from the LanceDB query
+    :param schema: the lancedb table schema
+    :return: a haystack Document
+    """
 
     is_empty = result.pop("_isempty")
     fields = [schema.field(field_name) for field_name in schema.names if field_name != "_isempty"]
@@ -32,32 +37,17 @@ def convert_lancedb_to_document(result: dict, schema: pa.Schema) -> Document:
     if not doc_dict.get("meta"):
         doc_dict["meta"] = {}
 
-    # TODO: consider refactoring this,  it feels like duplication even though the root of the tree is special.
-    # For the fields which are mentioned in the _isempty section, only include if they're not empty. (including vector)
-
-    # doc_dict.update({
-    #    field_name: convert_field(result[field_name], schema.field(field_name).type)
-    #    for field_name, is_empty in result['_isempty'].items() if not is_empty
-    # })
-
-    # TODO: consider if I can remove this,  it should probably never actually do anything
-    # catch anything that isn't in the _isempty
-    # dealt_with_fields = set(result['_isempty'].keys()) | {'score', '_distance'}
-    # left_over_fields = set(result.keys()) - dealt_with_fields
-    # for field_name in left_over_fields:
-    #    doc_dict[field_name] = result[field_name]
-
-    # recursively process the metadata field
-    # if doc_dict['meta']:
-    #    meta_dict = convert_field(doc_dict['meta'], schema.field('meta').type)
-    #    doc_dict['meta'] = meta_dict
-
     doc = Document.from_dict(doc_dict)
     return doc
 
 
 def convert_field(value: Any, field_type: pa.DataType) -> Any:
-    """ """
+    """Converts the value of a field from it's representation in LanceDB to the one used for Haystack
+
+    :param value: the value to convert
+    :param field_type: The pyarrow type of the value, so we know how to convert it.
+    :return: the converted value
+    """
     type_str = str(field_type)
     if type_str.startswith("timestamp"):
         return convert_timestamp(value, field_type)
@@ -72,6 +62,10 @@ def convert_struct(value: dict, field_type: pa.StructType) -> dict:
 
     This involves filtering out empty fields, as well as handling some type conversions to ensure that it complies with
     the expected Haystack DocumentStore behaviour.
+
+    :param value: the value to convert
+    :param field_type: The pyarrow type of the value, so we know how to convert it.
+    :return: the converted value
     """
     is_empty = value.pop("_isempty")
     fields = [field_type.field(idx) for idx in range(field_type.num_fields) if field_type.field(idx).name != "_isempty"]
@@ -84,5 +78,10 @@ def convert_struct(value: dict, field_type: pa.StructType) -> dict:
 
 
 def convert_timestamp(value: datetime.datetime, field_type: pa.DataType):  # noqa: ARG001
-    """Convert timestamp values to isoformat as expected by Haystack"""
+    """Convert timestamp values to isoformat as expected by Haystack
+
+    :param value: the value to convert
+    :param field_type: The pyarrow type of the value, in this case, is ignored.
+    :return: the converted value
+    """
     return value.isoformat()
