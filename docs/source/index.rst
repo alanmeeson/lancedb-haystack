@@ -10,6 +10,7 @@
    :maxdepth: 2
    :caption: Contents:
 
+   self
 
 
 Indices and tables
