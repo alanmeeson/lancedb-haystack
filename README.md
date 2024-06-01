@@ -1,4 +1,4 @@
-[![test](https://github.com/alanmeeson/lancedb-haystack/actions/workflows/test.yml/badge.svg)](https://github.com/alanmeeson/lancedb-haystack/actions/workflows/test.yml)
+[![test](https://github.com/alanmeeson/lancedb-haystack/actions/workflows/test.yml/badge.svg)](https://github.com/alanmeeson/lancedb-haystack/actions/workflows/test.yml) [![Documentation Status](https://readthedocs.org/projects/lancedb-haystack/badge/?version=latest)](https://lancedb-haystack.readthedocs.io/en/latest/?badge=latest)
 
 # LanceDB Haystack Document store
 
