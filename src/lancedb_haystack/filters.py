@@ -10,8 +10,10 @@ from haystack.errors import FilterError
 
 
 def convert_filters_to_where_clause(filters: Dict[str, Any]) -> str:
-    """
-    Convert Haystack filters to a WHERE clause and a tuple of params to query PostgreSQL.
+    """Convert Haystack filters to a WHERE clause and a tuple of params to query PostgreSQL.
+
+    :param filters: the filters to convert. See: https://docs.haystack.deepset.ai/docs/metadata-filtering
+    :return: a string containing the LanceDB where clause.
     """
     if "field" in filters:
         query = _parse_comparison_condition(filters)
@@ -22,6 +24,7 @@ def convert_filters_to_where_clause(filters: Dict[str, Any]) -> str:
 
 
 def _parse_logical_condition(condition: Dict[str, Any]) -> str:
+    """Compose the sub-queries of a logical step"""
     if "operator" not in condition:
         msg = f"'operator' key missing in {condition}"
         raise FilterError(msg)
@@ -57,6 +60,11 @@ def _parse_logical_condition(condition: Dict[str, Any]) -> str:
 
 
 def _parse_comparison_condition(condition: Dict[str, Any]) -> str:
+    """Identifies and applies the right comparison function.
+
+    :param condition: The condition term to convert
+    :return: a string containing the comparison for use in a LanceDB where clause
+    """
     field: str = condition["field"]
     if "operator" not in condition:
         msg = f"'operator' key missing in {condition}"
@@ -82,6 +90,12 @@ def _parse_comparison_condition(condition: Dict[str, Any]) -> str:
 
 
 def equal(field: str, value: Any) -> str:
+    """Construct a query string for comparing equality between a field and a value.
+
+    :param field: the field to compare
+    :param value: the value to compare it to.
+    :return: a comparison string.
+    """
     if value is None:
         return is_null(field)
     if isinstance(value, str):
@@ -93,8 +107,12 @@ def equal(field: str, value: Any) -> str:
 
 
 def not_equal(field: str, value: Any) -> str:
-    # we use IS DISTINCT FROM to correctly handle NULL values
-    # (not handled by !=)
+    """Construct a query string for filtering when a field and a value are not equal
+
+    :param field: the field to compare
+    :param value: the value to compare it to.
+    :return: a comparison string.
+    """
     if value is None:
         query = is_not_null(field)
     elif isinstance(value, str):
@@ -105,6 +123,15 @@ def not_equal(field: str, value: Any) -> str:
 
 
 def greater_than(field: str, value: Any) -> str:
+    """Construct a query string for filtering when a field is greater than the value.
+
+    Note: 'greater_than' comparisons to None always evaluate to false.
+
+    :param field: the field to compare
+    :param value: the value to compare it to.
+    :return: a comparison string.
+    :raises FilterError: if value is a DataFrame, string, list or dict which are not supported for this comparison.
+    """
     if value is None:
         # Greater than comparisons with "None" as value are always false.
         return "False == True"
@@ -130,6 +157,15 @@ def greater_than(field: str, value: Any) -> str:
 
 
 def greater_than_equal(field: str, value: Any) -> str:
+    """Construct a query string for filtering when a field is greater than or equal to the value.
+
+    Note: 'greater_than_equal' comparisons to None always evaluate to false.
+
+    :param field: the field to compare
+    :param value: the value to compare it to.
+    :return: a comparison string.
+    :raises FilterError: if value is a DataFrame, string, list or dict which are not supported for this comparison.
+    """
     if value is None:
         # Greater than equal comparisons with "None" as value are always false.
         return "False == True"
@@ -154,6 +190,15 @@ def greater_than_equal(field: str, value: Any) -> str:
 
 
 def less_than(field: str, value: Any) -> str:
+    """Construct a query string for filtering when a field is less than to the value.
+
+    Note: 'less_than' comparisons to None always evaluate to false.
+
+    :param field: the field to compare
+    :param value: the value to compare it to.
+    :return: a comparison string.
+    :raises FilterError: if value is a DataFrame, string, list or dict which are not supported for this comparison.
+    """
     if value is None:
         # Less than comparisons with "None" as value are always false.
         return "False == True"
@@ -178,6 +223,15 @@ def less_than(field: str, value: Any) -> str:
 
 
 def less_than_equal(field: str, value: Any) -> str:
+    """Construct a query string for filtering when a field is less than or equal to the value.
+
+    Note: 'less_than_equal' comparisons to None always evaluate to false.
+
+    :param field: the field to compare
+    :param value: the value to compare it to.
+    :return: a comparison string.
+    :raises FilterError: if value is a DataFrame, string, list or dict which are not supported for this comparison.
+    """
     if value is None:
         # Less than equal comparisons with "None" as value are always false.
         return "False == True"
@@ -202,6 +256,13 @@ def less_than_equal(field: str, value: Any) -> str:
 
 
 def not_in(field: str, value: Any) -> str:
+    """Construct a query string for filtering when a field's value is not in a provided list.
+
+    :param field: the field to filter on
+    :param value: the list of values.
+    :return: a comparison string.
+    :raises FilterError: if value is not a list.
+    """
     if not isinstance(value, list):
         msg = f"{field}'s value must be a list when using 'not in' comparator in Pinecone"
         raise FilterError(msg)
@@ -211,6 +272,13 @@ def not_in(field: str, value: Any) -> str:
 
 
 def in_(field: str, value: Any) -> str:
+    """Construct a query string for filtering when a field's value is in a provided list.
+
+    :param field: the field to filter on
+    :param value: the list of values.
+    :return: a comparison string.
+    :raises FilterError: if value is not a list.
+    """
     if not isinstance(value, list):
         msg = f"{field}'s value must be a list when using 'in' comparator in Pinecone"
         raise FilterError(msg)
@@ -223,7 +291,11 @@ def in_(field: str, value: Any) -> str:
 
 
 def is_null(field: str) -> str:
-    """Construct Filter term for the field being either empty or Null"""
+    """Construct Filter term for the field being either empty or Null
+
+    :param field: the field to check for being null
+    :return: the filter string
+    """
     if field == "vector":
         # IF it's the vector field, check the _isempty_vector field too
         query = "(_isempty_vector == True OR vector is NULL)"
@@ -238,7 +310,11 @@ def is_null(field: str) -> str:
 
 
 def is_not_null(field: str) -> str:
-    """Construct Filter term for the field being neither empty or Null"""
+    """Construct Filter term for the field being neither empty nor Null
+
+    :param field: the field to check for being null
+    :return: the filter string
+    """
     if field == "vector":
         # IF it's the vector field, check the _isempty_vector field too
         query = "(_isempty_vector == False AND vector IS NOT NULL)"
