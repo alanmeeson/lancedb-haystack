@@ -29,7 +29,9 @@ dependencies = [
   "typing_extensions",
   "lancedb",
   "tantivy",
-  "duckdb"
+  "duckdb",
+  "pyarrow",
+  "pandas"
 ]
 
 [project.urls]

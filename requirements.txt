@@ -8,3 +8,4 @@ lancedb
 tantivy
 fastembed-haystack
 duckdb
+pyarrow
