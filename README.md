@@ -13,7 +13,36 @@ The current simplest way to get LanceDB-Haystack is to install from GitHub via p
 
 ## Usage
 
-See the example in `examples/pipeline-usage.ipynb`
+```python
+import pyarrow as pa
+from lancedb_haystack import LanceDBDocumentStore
+from lancedb_haystack import LanceDBEmbeddingRetriever, LanceDBFTSRetriever
+
+# Declare the metadata fields schema, this lets us filter using it.
+# See: https://arrow.apache.org/docs/python/api/datatypes.html
+metadata_schema = pa.struct([
+  ('title', pa.string()),    
+  ('publication_date', pa.timestamp('s')),
+  ('page_number', pa.int32()),
+  ('topics', pa.list_(pa.string()))
+])
+
+# Create the DocumentStore
+document_store = LanceDBDocumentStore(
+  database='my_database', 
+  table_name="documents", 
+  metadata_schema=metadata_schema, 
+  embedding_dims=384
+)
+
+# Create an embedding retriever
+embedding_retriever = LanceDBEmbeddingRetriever(document_store)
+
+# Create a Full Text Search retriever
+fts_retriever = LanceDBFTSRetriever(document_store)
+```
+
+See also `examples/pipeline-usage.ipynb` for a full worked example.
 
 ## Development
 
@@ -65,10 +94,6 @@ To build the api docs run the following:
 ### Roadmap
 
 In no particular order:
-- **Write more documentation**
-  
-  There's docstrings in the code, but there's an outstanding task to configure pydoc or similar to produce some api
-  docs.  Also, documentation to explain the data model and how it works would be a good idea.
 
 - **Figure out if it's possible to have LanceDB work with dynamic metadata**
 
