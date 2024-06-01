@@ -9,6 +9,3 @@ tantivy
 fastembed-haystack
 duckdb
 pyarrow
-sphinx
-sphinx-autoapi
-myst-parser
