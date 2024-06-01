@@ -7,7 +7,6 @@ from typing import Any, Dict
 
 import pandas as pd
 from haystack.errors import FilterError
-from pandas import DataFrame
 
 
 def convert_filters_to_where_clause(filters: Dict[str, Any]) -> str:
@@ -71,7 +70,7 @@ def _parse_comparison_condition(condition: Dict[str, Any]) -> str:
         raise FilterError(msg)
 
     value: Any = condition["value"]
-    if isinstance(value, DataFrame):
+    if isinstance(value, pd.DataFrame):
         # DataFrames are stored as JSONB and we query them as such
         value = value.to_json()
         # Note: not using Jsonb, but just json
@@ -82,9 +81,9 @@ def _parse_comparison_condition(condition: Dict[str, Any]) -> str:
     return query
 
 
-def _equal(field: str, value: Any) -> str:
+def equal(field: str, value: Any) -> str:
     if value is None:
-        return _is_null(field)
+        return is_null(field)
     if isinstance(value, str):
         query = f"{field} = '{value}'"
     else:
@@ -93,19 +92,19 @@ def _equal(field: str, value: Any) -> str:
     return query
 
 
-def _not_equal(field: str, value: Any) -> str:
+def not_equal(field: str, value: Any) -> str:
     # we use IS DISTINCT FROM to correctly handle NULL values
     # (not handled by !=)
     if value is None:
-        query = _is_not_null(field)
+        query = is_not_null(field)
     elif isinstance(value, str):
-        query = f"({_is_null(field)} OR {field} != '{value}')"
+        query = f"({is_null(field)} OR {field} != '{value}')"
     else:
-        query = f"({_is_null(field)} OR {field} != {value})"
+        query = f"({is_null(field)} OR {field} != {value})"
     return query
 
 
-def _greater_than(field: str, value: Any) -> str:
+def greater_than(field: str, value: Any) -> str:
     if value is None:
         # Greater than comparisons with "None" as value are always false.
         return "False == True"
@@ -127,10 +126,10 @@ def _greater_than(field: str, value: Any) -> str:
         msg = f"Filter value can't be of type {type(value)} using operators '>', '>=', '<', '<='"
         raise FilterError(msg)
 
-    return f"({_is_not_null(field)} AND {field} > {value})"
+    return f"({is_not_null(field)} AND {field} > {value})"
 
 
-def _greater_than_equal(field: str, value: Any) -> str:
+def greater_than_equal(field: str, value: Any) -> str:
     if value is None:
         # Greater than equal comparisons with "None" as value are always false.
         return "False == True"
@@ -151,10 +150,10 @@ def _greater_than_equal(field: str, value: Any) -> str:
         msg = f"Filter value can't be of type {type(value)} using operators '>', '>=', '<', '<='"
         raise FilterError(msg)
 
-    return f"({_is_not_null(field)} AND {field} >= {value})"
+    return f"({is_not_null(field)} AND {field} >= {value})"
 
 
-def _less_than(field: str, value: Any) -> str:
+def less_than(field: str, value: Any) -> str:
     if value is None:
         # Less than comparisons with "None" as value are always false.
         return "False == True"
@@ -175,10 +174,10 @@ def _less_than(field: str, value: Any) -> str:
         msg = f"Filter value can't be of type {type(value)} using operators '>', '>=', '<', '<='"
         raise FilterError(msg)
 
-    return f"({_is_not_null(field)} AND {field} < {value})"
+    return f"({is_not_null(field)} AND {field} < {value})"
 
 
-def _less_than_equal(field: str, value: Any) -> str:
+def less_than_equal(field: str, value: Any) -> str:
     if value is None:
         # Less than equal comparisons with "None" as value are always false.
         return "False == True"
@@ -199,16 +198,16 @@ def _less_than_equal(field: str, value: Any) -> str:
         msg = f"Filter value can't be of type {type(value)} using operators '>', '>=', '<', '<='"
         raise FilterError(msg)
 
-    return f"({_is_not_null(field)} AND {field} <= {value})"
+    return f"({is_not_null(field)} AND {field} <= {value})"
 
 
-def _not_in(field: str, value: Any) -> str:
+def not_in(field: str, value: Any) -> str:
     if not isinstance(value, list):
         msg = f"{field}'s value must be a list when using 'not in' comparator in Pinecone"
         raise FilterError(msg)
 
     vals = ", ".join([f"'{val}'" if isinstance(val, str) else str(val) for val in value])
-    return f"{_is_null(field)} OR {field} NOT IN ({vals}))"
+    return f"{is_null(field)} OR {field} NOT IN ({vals}))"
 
 
 def in_(field: str, value: Any) -> str:
@@ -218,12 +217,12 @@ def in_(field: str, value: Any) -> str:
 
     # ValueError: LanceError(IO): Received literal Utf8("10") and could not convert to literal of type 'Int32'
     vals = ", ".join([f"'{val}'" if isinstance(val, str) else str(val) for val in value])
-    query = f"{_is_not_null(field)} AND {field} IN ({vals})"
+    query = f"{is_not_null(field)} AND {field} IN ({vals})"
 
     return query
 
 
-def _is_null(field: str) -> str:
+def is_null(field: str) -> str:
     """Construct Filter term for the field being either empty or Null"""
     if field == "vector":
         # IF it's the vector field, check the _isempty_vector field too
@@ -238,7 +237,7 @@ def _is_null(field: str) -> str:
     return query
 
 
-def _is_not_null(field: str) -> str:
+def is_not_null(field: str) -> str:
     """Construct Filter term for the field being neither empty or Null"""
     if field == "vector":
         # IF it's the vector field, check the _isempty_vector field too
@@ -254,12 +253,12 @@ def _is_not_null(field: str) -> str:
 
 
 COMPARISON_OPERATORS = {
-    "==": _equal,
-    "!=": _not_equal,
-    ">": _greater_than,
-    ">=": _greater_than_equal,
-    "<": _less_than,
-    "<=": _less_than_equal,
+    "==": equal,
+    "!=": not_equal,
+    ">": greater_than,
+    ">=": greater_than_equal,
+    "<": less_than,
+    "<=": less_than_equal,
     "in": in_,
-    "not in": _not_in,
+    "not in": not_in,
 }
