@@ -3,7 +3,7 @@
 # LanceDB Haystack Document store
 
 LanceDB-Haystack is an embedded [LanceDB](https://lancedb.github.io/lancedb/) backed Document Store for 
-[Haystack 2.X](https://github.com/deepset-ai/haystack/) intended for prototyping or small systems.
+[Haystack 2.X](https://github.com/deepset-ai/haystack/).
 
 ## Installation
 
@@ -46,10 +46,20 @@ To build the package you can use `hatch`:
 ```console
 ~$ hatch build
 [sdist]
-dist/lancedb_haystack-0.0.1.tar.gz
+dist/lancedb_haystack-0.1.0.tar.gz
 
 [wheel]
-dist/lancedb_haystack-0.0.1-py3-none-any.whl
+dist/lancedb_haystack-0.1.0-py3-none-any.whl
+```
+
+### Document
+
+To build the api docs run the following:
+
+```console
+~$ cd docs
+~$ make clean
+~$ make build
 ```
 
 ### Roadmap
@@ -62,7 +72,7 @@ In no particular order:
 
 - **Figure out if it's possible to have LanceDB work with dynamic metadata**
 
-  Currently this implementation is limited to having only metadata which is defined in the metadata_schema.  It would be
+  Currently, this implementation is limited to having only metadata which is defined in the metadata_schema.  It would be
   nice to be able to infer a schema from the first document to be added, or even better, be able to just have arbitrary
   metadata, rather than having to specify it all up front.
 
@@ -76,5 +86,5 @@ In no particular order:
 The DocumentStore requires a pyarrow StructType to be specified as the schema for the metadata dict.  This should cover
 all metadata fields which may appear in any of the documents you want to store.
 
-Currently the system supports the basic datatypes (ints, floats, bools, strings, etc.)  as well as structs.  Others may
-work, but haven't been tested.
+Currently, the system supports the basic datatypes (ints, floats, bools, strings, etc.)  as well as structs and lists.  
+Others may work, but haven't been tested.
