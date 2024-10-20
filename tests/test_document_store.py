@@ -48,7 +48,7 @@ class TestLanceDBDocumentStore(DocumentStoreBaseTests):
         eps = pow(10, -6)
         are_equal = []
         for a, b in zip(received, expected):
-            if type(a) != type(b):
+            if type(a) is not type(b):
                 is_equal = False
             else:
                 a_dict = a.to_dict()

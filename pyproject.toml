@@ -75,12 +75,12 @@ dependencies = [
 [tool.hatch.envs.lint.scripts]
 typing = "mypy --install-types --non-interactive {args:src/lancedb_haystack tests}"
 style = [
-  "ruff check {args:.}",
-  "black --check --diff {args:.}",
+  "ruff check {args:src/lancedb_haystack tests}",
+  "black --check --diff {args:src/lancedb_haystack tests}",
 ]
 fmt = [
-  "black {args:.}",
-  "ruff --fix {args:.}",
+  "black {args:src/lancedb_haystack tests}",
+  "ruff --fix {args:src/lancedb_haystack tests}",
   "style",
 ]
 all = [
