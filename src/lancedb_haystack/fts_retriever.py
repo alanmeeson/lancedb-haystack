@@ -43,7 +43,7 @@ class LanceDBFTSRetriever:
         self._top_k = top_k
 
     @component.output_types(documents=List[Document])
-    def run(self, query: str, filters: Optional[Dict[str, Any]] = None, top_k: Optional[int] = 10):
+    def run(self, query: str, filters: Optional[Dict[str, Any]] = None, top_k: Optional[int] = None):
         """
         Run the LanceDBFTSRetriever on the given input data.
 
