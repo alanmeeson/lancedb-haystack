@@ -50,6 +50,7 @@ class LanceDBDocumentStore(DocumentStore):
         self._metadata_schema = metadata_schema
         self._embedding_dims = embedding_dims
         self.db = lancedb.connect(database)
+        self._local = False if "://" in database else True
 
     def table_exists(self) -> bool:
         """Check if the table this DocumentStore relies on already exists.
@@ -277,7 +278,7 @@ class LanceDBDocumentStore(DocumentStore):
                 table.merge_insert("id").when_not_matched_insert_all().execute(doc_dicts)
                 num_modified = len(unique_new_ids)
 
-        table.create_fts_index("content", replace=True)
+        table.create_fts_index("content", replace=True, use_tantivy=self._local)
 
         return num_modified
 
