@@ -43,7 +43,8 @@ def convert_document_to_lancedb(document: Document, schema: pa.Schema) -> dict:
 
     lance_dict["_isempty"] = _isempty
 
-    return lance_dict
+    # Ensure ordering of results is aligned with schema.  Kudos to michael-long88
+    return {schema_name: lance_dict[schema_name] for schema_name in schema.names}
 
 
 def convert_field(value: Any, field_type: pa.DataType):
